@@ -1,84 +1,94 @@
 package br.maua.cic303;
 
-import java_cup.runtime.Symbol; // Importação necessária para o CUP
+import java_cup.runtime.Symbol;
 
 %%
 
 %class Lexer
 %public
 %unicode
-%cup       // <-- CRÍTICO: Esta diretiva ativa a integração com o CUP
+%cup
 %line
 %column
 
 %{
-    // Funções auxiliares para gerar objetos Symbol para o CUP
+    // Função auxiliar para criar objetos Symbol (esperados pelo CUP)
+    // O CUP usa Symbol(id, linha, coluna, valor)
     private Symbol symbol(int type) {
         return new Symbol(type, yyline, yycolumn);
     }
-    
+
     private Symbol symbol(int type, Object value) {
         return new Symbol(type, yyline, yycolumn, value);
     }
 %}
 
 /* ========================================================================= */
-/* MACROS (Expressões Regulares Auxiliares)                                  */
+/* MACROS                                                                    */
 /* ========================================================================= */
 LineTerminator = \r|\n|\r\n
 WhiteSpace     = {LineTerminator} | [ \t\f]
 
-/* TODO 1: Crie a macro para Número (Notação de Engenharia) */
-/* Dica: Deve aceitar 7, 3.14, 6.02E23, 6.62e-34 */
+/* Número (Notação de Engenharia) */
 Number = [0-9]+(\.[0-9]+)?([Ee][+-]?[0-9]+)?
 
-/* TODO 2: Crie a macro para Identificador */
-/* Dica: Letras, seguidas de letras, números ou _. MÁXIMO de 32 caracteres! */
-/* Se a macro de max 32 for difícil, use {Letter}({Letter}|{Digit}|_)* e trate o tamanho na regra! */
+/* Identificador (Máximo 32 caracteres) */
 Letter = [a-zA-Z]
 Digit  = [0-9]
 Identifier = {Letter}({Letter}|{Digit}|_){0,31}
 
 %%
 /* ========================================================================= */
-/* REGRAS LÉXICAS (Altere para retornar sym.XXX)                                 */
+/* REGRAS LÉXICAS                                                            */
 /* ========================================================================= */
 
 <YYINITIAL> {
     
-    /* Regra para ignorar espaços em branco */
+    /* Ignorar espaços em branco */
     {WhiteSpace}    { /* Não faz nada */ }
 
-    /* TODO 3: Palavras Reservadas (if, then, else, while) */
+    /* Palavras Reservadas (Usando nomes definidos no Parser.cup / sym.java) */
     "if"            { return symbol(sym.IF); }
     "then"          { return symbol(sym.THEN); }
-    /* Adicione as demais aqui... */
+    "else"          { return symbol(sym.ELSE); }
+    "while"         { return symbol(sym.WHILE); }
 
-    /* TODO 4: Pontuação ( ) { } ; */
-    \(              { return symbol(sym.LPAREN); }
-    /* Adicione as demais aqui... */
+    /* Pontuação */
+    "("             { return symbol(sym.LPAREN); }
+    ")"             { return symbol(sym.RPAREN); }
+    "{"             { return symbol(sym.LBRACE); }
+    "}"             { return symbol(sym.RBRACE); }
+    ";"             { return symbol(sym.SEMI); }
 
-    /* TODO 5: Operadores de Atribuição e Relacionais (=, ==, !=, <, >, <=, >=) */
-    /* CUIDADO COM A ORDEM! O JFlex casa a regra que aparece primeiro se houver empate de tamanho. */
-    /* Coloque os operadores duplos antes dos simples! */
+    /* Operadores Relacionais (Ordem importa: os de 2 caracteres antes) */
+    "=="            { return symbol(sym.REL_OP, yytext()); }
+    "!="            { return symbol(sym.REL_OP, yytext()); }
+    "<="            { return symbol(sym.REL_OP, yytext()); }
+    ">="            { return symbol(sym.REL_OP, yytext()); }
+    "<"             { return symbol(sym.REL_OP, yytext()); }
+    ">"             { return symbol(sym.REL_OP, yytext()); }
+
+    /* Atribuição */
     "="             { return symbol(sym.ASSIGN); }
-    /* Adicione os relacionais aqui e retorne Tag.REL_OP ... */
 
-    /* TODO 6: Operadores Matemáticos (+, -, *, /, %) */
-    /* Dica: "+" | "-" retornam Tag.ADD_OP. Os outros retornam Tag.MUL_OP */
-    "+" | "-"       { return symbol(sym.ADD_OP, yytext()); }
-    /* Adicione as multiplicações aqui... */
+    /* Operadores Matemáticos */
+    "+"             { return symbol(sym.ADD_OP, yytext()); }
+    "-"             { return symbol(sym.ADD_OP, yytext()); }
+    "*"             { return symbol(sym.MUL_OP, yytext()); }
+    "/"             { return symbol(sym.MUL_OP, yytext()); }
+    "%"             { return symbol(sym.MUL_OP, yytext()); }
 
-    /* Regras para as Macros */
+    /* Macros */
     {Identifier}    { return symbol(sym.ID, yytext()); }
     {Number}        { return symbol(sym.NUMBER, yytext()); }
 
-    /* Identificadores grandes demais (Captura o erro) */
-   {OversizedIdentifier} { throw new RuntimeException("Erro Léxico: Identificador gigante -> " + yytext()); }
+    /* Erro: Identificador muito longo */
+    {Letter}({Letter}|{Digit}|_){31}({Letter}|{Digit}|_)+ { 
+        throw new RuntimeException("Erro Léxico: Identificador ultrapassou 32 caracteres na linha " + (yyline+1)); 
+    }
 
-    /* Fallback: Qualquer outro caractere não reconhecido gera um Erro */
-    .   {throw new RuntimeException("Erro Léxico: Caractere Ilegal -> " + yytext()); }
+    /* Fallback: Caractere Ilegal */
+    . { 
+        throw new RuntimeException("Erro Léxico: Caractere ilegal <" + yytext() + "> na linha " + (yyline+1)); 
+    }
 }
-
-/* Regra para o Final do Arquivo */
-<<EOF>>             { return token(Tag.EOF, ""); }
